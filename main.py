@@ -3,6 +3,8 @@ import sys
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+from prompts import system_prompt
+from call_functions import available_functions
 
 # Check if prompt argument is provided
 if len(sys.argv) < 2:
@@ -34,14 +36,28 @@ messages = [
     types.Content(role="user", parts=[types.Part(text=user_prompt)]),
 ]
 
-# Generate content using the Gemini model but with messages
+# Generate content using the Gemini model with system instructions and tools
 response = client.models.generate_content(
     model="gemini-2.0-flash-001",
     contents=messages,
+    config=types.GenerateContentConfig(
+        tools=[available_functions], 
+        system_instruction=system_prompt
+    ),
 )
 
-# Print the model's response
-print(response.text)
+# Check if the response contains function calls
+if response.candidates and response.candidates[0].content.parts:
+    for part in response.candidates[0].content.parts:
+        if hasattr(part, 'function_call') and part.function_call:
+            function_call_part = part.function_call
+            print(f"Calling function: {function_call_part.name}({function_call_part.args})")
+        elif hasattr(part, 'text') and part.text:
+            print(part.text)
+else:
+    # Fallback to the original method if the structure is different
+    if hasattr(response, 'text') and response.text:
+        print(response.text)
 
 # Print token usage information
 if verbose:
