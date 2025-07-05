@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 from prompts import system_prompt
-from call_functions import available_functions
+from call_functions import available_functions, call_function
 
 # Check if prompt argument is provided
 if len(sys.argv) < 2:
@@ -41,7 +41,7 @@ response = client.models.generate_content(
     model="gemini-2.0-flash-001",
     contents=messages,
     config=types.GenerateContentConfig(
-        tools=[available_functions], 
+        tools=[available_functions],
         system_instruction=system_prompt
     ),
 )
@@ -51,7 +51,21 @@ if response.candidates and response.candidates[0].content.parts:
     for part in response.candidates[0].content.parts:
         if hasattr(part, 'function_call') and part.function_call:
             function_call_part = part.function_call
-            print(f"Calling function: {function_call_part.name}({function_call_part.args})")
+            
+            # Call the function using call_function
+            function_call_result = call_function(function_call_part)
+            
+            # Check if the result has the expected structure
+            if (not hasattr(function_call_result, 'parts') or 
+                len(function_call_result.parts) == 0 or 
+                not hasattr(function_call_result.parts[0], 'function_response') or
+                not hasattr(function_call_result.parts[0].function_response, 'response')):
+                raise RuntimeError(f"Function call result does not have expected structure: {function_call_result}")
+            
+            # Print the result if verbose mode is enabled
+            if verbose:
+                print(f"-> {function_call_result.parts[0].function_response.response}")
+                
         elif hasattr(part, 'text') and part.text:
             print(part.text)
 else:
